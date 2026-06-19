@@ -1,101 +1,62 @@
-name: "Godot iOS Unsigned Build - Ultimate Fix"
+name: "Godot iOS Unsigned Build"
 
 on:
   push:
-    branches: [ "main" ]
-  workflow_dispatch:
+    branches:
+      - main  # আপনার মেইন ব্রাঞ্চের নাম (প্রয়োজনে পরিবর্তন করুন)
+  workflow_dispatch: # এর মাধ্যমে আপনি গিটহাব থেকে ম্যানুয়ালিও বিল্ড রান করতে পারবেন
 
 jobs:
-  ios-unsigned-export:
+  build-ios:
     runs-on: macos-latest
 
     steps:
-      # ১. রিপোজিটরি থেকে সোর্স কোড চেকআউট করা
-      - name: Checkout Source Code
+      # ১. রিপোজিটরি থেকে কোড চেকআউট করা
+      - name: Checkout Repository
         uses: actions/checkout@v4
 
-      # ২. গডট ইঞ্জিন এবং অফিসিয়াল এক্সপোর্ট টেমপ্লেট ডাউনলোড ও সেটআপ
-      - name: Setup Godot Engine & Templates
+      # ২. জিপ ফাইল আনজিপ করা
+      # মনে করুন আপনার জিপ ফাইলের নাম 'game_project.zip'
+      - name: Unzip Project Files
         run: |
-          GODOT_VERSION="4.2.2"
+          echo "Unzipping project files..."
+          unzip -o game_project.zip -d project_folder
           
-          # গডট ম্যাক ওএস হেডলেস বাইনারি ডাউনলোড
-          curl -LO https://github.com/godotengine/godot/releases/download/${GODOT_VERSION}-stable/Godot_v${GODOT_VERSION}-stable_macos.universal.zip
-          unzip Godot_v${GODOT_VERSION}-stable_macos.universal.zip
+      # ৩. গডট ইঞ্জিন ডাউনলোড ও সেটআপ করা
+      # এখানে গডট ৪.x এর একটি স্ট্যান্ডার্ড ভার্সন ব্যবহার করা হয়েছে। আপনার ভার্সন অনুযায়ী লিংক বদলাতে পারেন।
+      - name: Download and Setup Godot Engine
+        run: |
+          echo "Downloading Godot Engine..."
+          curl -L -o Godot.zip https://github.com/godotengine/godot/releases/download/4.2.1-stable/Godot_v4.2.1-stable_macos.universal.zip
+          unzip Godot.zip
           mv Godot.app /Applications/Godot.app
-          
-          # এক্সপোর্ট টেমপ্লেট ডাউনলোড ও সেটআপ
-          curl -LO https://github.com/godotengine/godot/releases/download/${GODOT_VERSION}-stable/Godot_v${GODOT_VERSION}-stable_export_templates.tpz
-          mkdir -p ~/Library/Application\ Support/Godot/export_templates/${GODOT_VERSION}.stable
-          unzip Godot_v${GODOT_VERSION}-stable_export_templates.tpz -d /tmp/templates
-          mv /tmp/templates/templates/* ~/Library/Application\ Support/Godot/export_templates/${GODOT_VERSION}.stable/
-          
-          echo "Godot environment successfully set up."
+          echo "/Applications/Godot.app/Contents/MacOS" >> $GITHUB_PATH
 
-      # ৩. রানারের ডিরেক্টরি পারমিশন ফিক্স করা
-      - name: Fix Directory Permissions
-        run: |
-          sudo chown -R runner:staff .
-          chmod -R 777 .
-
-      # ৪. ডাইনামিকালি আসল প্রজেক্ট পাথ খুঁজে বের করা এবং প্যাক ফাইল জেনারেট করা
-      - name: Pack Project Files Freely
+      # ৪. গডট প্রজেক্ট বিল্ড করা (Xcode Project জেনারেট করা)
+      # 'iOS' হচ্ছে আপনার Godot Export Preset এর নাম। 
+      # 'project_folder/project.godot' হলো আনজিপ হওয়া মেইন প্রজেক্ট ফাইল।
+      - name: Godot Export to Xcode Project
         run: |
           mkdir -p build/ios
-          
-          # ইন্টেলিজেন্টলি project.godot ফাইলের সঠিক লোকেশন খুঁজে বের করা
-          PROJECT_PATH=$(find . -name "project.godot" -exec dirname {} \;)
-          
-          if [ -z "$PROJECT_PATH" ]; then
-            echo "Error: project.godot file not found anywhere in the repository!"
-            exit 1
-          fi
-          
-          echo "Success: Found project.godot at path: $PROJECT_PATH"
-          
-          echo "Starting Asset Import Warmup..."
-          # সঠিক পাথে গডট এডিটর রান করানো হচ্ছে যাতে এসেট ইনডেক্সিং কমপ্লিট হয়
-          /Applications/Godot.app/Contents/MacOS/Godot --headless --path "$PROJECT_PATH" --editor --quit || true
-          
-          echo "Starting Final Project Packing..."
-          # সঠিক পাথে গডটকে নির্দেশ দিয়ে .pck তৈরি করা
-          /Applications/Godot.app/Contents/MacOS/Godot --headless --path "$PROJECT_PATH" --pack build/ios/game.pck
+          Godot --headless --path project_folder --export-release "iOS" build/ios/game.xcodeproj
 
-          # ফাইলটি তৈরি হয়েছে কিনা তা নিশ্চিত করা
-          if [ ! -f "build/ios/game.pck" ]; then
-            echo "Error: game.pck was not generated!"
-            exit 1
-          fi
-          echo "game.pck generated successfully without freezing."
-
-      # ৫. নেটিভ আইওএস বিল্ড স্ট্রাকচার এবং অফিশিয়াল কন্টেইনার রেডি করা
-      - name: Structure Native iOS App Package
+      # ৫. এক্সকোড দিয়ে আনসাইনড আইপিএ/বিল্ড তৈরি করা
+      - name: Build Xcode Project (Unsigned)
         run: |
           cd build/ios
-          
-          # গডটের অফিসিয়াল আইওএস টেমপ্লেট বাইনারি থেকে ডামি অ্যাপ এক্সট্র্যাক্ট করা
-          cp ~/Library/Application\ Support/Godot/export_templates/4.2.2.stable/ios.zip .
-          unzip ios.zip
-          rm ios.zip
-          
-          # জেনারেট হওয়া ডামি স্ট্রাকচারে আমাদের গেমের .pck ডেটা পুশ করা
-          mkdir -p Payload/GodotApp.app
-          cp -r * Payload/GodotApp.app/ 2>/dev/null || true
-          mv Payload/GodotApp.app/game.pck Payload/GodotApp.app/godot.pck
+          xcodebuild -project game.xcodeproj \
+            -scheme "game" \
+            -configuration Release \
+            -sdk iphoneos \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY="" \
+            PROVISIONING_PROFILE_SPECIFIER="" \
+            clean build
 
-      # ৬. এক্সকোড বা অ্যাপল সিএলআই ছাড়াই সলিড আনসাইনড আইপিএ জেনারেট করা
-      - name: Package to Unsigned .ipa
-        run: |
-          cd build/ios
-          # পেলোড ফোল্ডারটিকে সরাসরি স্ট্যান্ডার্ড জিপ ফরম্যাটে কম্পাইল করে .ipa এক্সটেনশন দেওয়া
-          zip -r MyUnsignedGame.ipa Payload
-          
-          mkdir -p ../../output
-          cp MyUnsignedGame.ipa ../../output/
-
-      # ৭. ফাইনাল সাকসেসফুল আনসাইনড আইপিএ ফাইলটি আর্টিফ্যাক্ট হিসেবে আপলোড করা
-      - name: Upload Finished IPA Artifact
-        uses: actions/upload-artifact@v4
+      # ৬. বিল্ড করা ফাইলগুলোকে জিপ/আইপিএ আকারে আর্টফ্যাক্ট হিসেবে সেভ করা
+      - name: Upload Unsigned Build Artifact
+        uses: actions/artifacts@v4
         with:
-          name: Godot-iOS-Unsigned-App
-          path: output/MyUnsignedGame.ipa
+          name: ios-unsigned-build
+          path: build/ios/build/Release-iphoneos/

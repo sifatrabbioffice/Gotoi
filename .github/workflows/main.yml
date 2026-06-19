@@ -41,7 +41,22 @@ jobs:
           mkdir -p .godot/editor
           chmod -R 777 .godot
 
-      # ৪. নিখুঁতভাবে ফ্রেশ প্রিসেট ফাইল তৈরি করা
+      # ৪. গডট ৪.এক্স-এর মিসিং এডিটর সেটিংস বাগ ফিক্স করা (The Core Fix)
+      - name: Mock Godot Editor Settings
+        run: |
+          # গডট যে গ্লোবাল ডিরেক্টরিতে সেটিংস ফাইল খোঁজে তা তৈরি করা
+          mkdir -p "/Users/runner/Library/Application Support/Godot"
+          
+          # একটি মিনিমাল বৈধ editor_settings-4.tres ফাইল তৈরি করা
+          cat << 'EOF' > "/Users/runner/Library/Application Support/Godot/editor_settings-4.tres"
+          [gd_resource type="EditorSettings" format=3]
+
+          [resource]
+          EOF
+          
+          echo "Global Godot editor settings mocked successfully."
+
+      # ৫. নিখুঁতভাবে ফ্রেশ প্রিসেট ফাইল তৈরি করা
       - name: Inject Valid iOS Export Preset
         run: |
           cat << 'EOF' > export_presets.cfg
@@ -73,20 +88,19 @@ jobs:
           EOF
           echo "Fresh export_presets.cfg created successfully."
 
-      # ৫. গডট প্রোজেক্ট রিসোর্স ও মেটাডেটা ফোর্স ইম্পোর্ট করা (New Professional Fix)
+      # ৬. গডট প্রোজেক্ট রিসোর্স মেটাডেটা প্রিপেয়ার করা
       - name: Godot Force Import Assets & Metadata
         run: |
-          # এই কমান্ডটি প্রজেক্টের সব অ্যাসেট এবং মেটাডেটা হেডলেস মুডে ইনডেক্সিং করবে
           /Applications/Godot.app/Contents/MacOS/Godot --headless --path . --editor --quit || true
 
-      # ৬. গডট ইঞ্জিনের সাহায্যে এক্সকোড প্রোজেক্ট স্ট্রাকচার জেনারেট করা
+      # ৭. গডট ইঞ্জিনের সাহায্যে এক্সকোড প্রোজেক্ট স্ট্রাকচার জেনারেট করা
       - name: Export Godot Project to Xcode
         run: |
           mkdir -p build/ios
-          # এবার ফ্রেশ মেটাডেটা পাওয়ায় গডট সাকসেসফুলি এক্সপোর্ট ফাইল তৈরি করবে
+          # এবার সেটিংস এবং মেটাডেটা দুটিই পাওয়ায় গডট নিখুঁতভাবে এক্সপোর্ট জেনারেট করবে
           /Applications/Godot.app/Contents/MacOS/Godot --headless --path . --export-release "iOS" build/ios/MyGame.xcodeproj
 
-      # ৭. এক্সকোড সিএলআই ব্যবহার করে কোড সাইনিং ছাড়া কম্পাইল করা
+      # ৮. এক্সকোড সিএলআই ব্যবহার করে কোড সাইনিং ছাড়া কম্পাইল করা
       - name: Build Unsigned App via Xcode CLI
         run: |
           cd build/ios
@@ -106,7 +120,7 @@ jobs:
             CODE_SIGN_IDENTITY="" \
             PROVISIONING_PROFILE_SPECIFIER=""
 
-      # ৮. জেনারেট হওয়া বাইনারিকে আইওএস স্ট্যান্ডার্ড .ipa প্যাকেজে রূপান্তর করা
+      # ৯. তৈরি হওয়া বাইনারিকে আইওএস স্ট্যান্ডার্ড .ipa প্যাকেজে রূপান্তর করা
       - name: Package App to Unsigned IPA
         run: |
           mkdir -p output/Payload
@@ -115,7 +129,7 @@ jobs:
           zip -r MyUnsignedGame.ipa Payload
           rm -rf Payload
 
-      # ৯. জেনারেট হওয়া আনসাইনড আইপিএ ফাইলটি গিটহাব আর্টিফ্যাক্ট হিসেবে আপলোড করা
+      # ১০. জেনারেট হওয়া আনসাইনড আইপিএ ফাইলটি গিটহাব আর্টিফ্যাক্ট হিসেবে আপলোড করা
       - name: Upload Finished IPA Artifact
         uses: actions/upload-artifact@v4
         with:

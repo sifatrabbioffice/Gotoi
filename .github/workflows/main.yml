@@ -32,15 +32,43 @@ jobs:
           
           echo "Godot environment successfully set up."
 
-      # ৩. রানারের ডিরেক্টরি এবং গডট গ্লোবাল ক্যাশ পারমিশন ঠিক করা
-      - name: Fix Directory Permissions
+      # ৩. রানারের ডিরেক্টরি পারমিশন ফিক্স করা (Write Permission Error Fix)
+      - name: Hard Fix Directory Permissions
         run: |
+          sudo chown -R runner:staff .
           chmod -R 777 .
-          mkdir -p "/Users/runner/Library/Application Support/Godot"
-          chmod -R 777 "/Users/runner/Library/Application Support/Godot"
+          rm -rf .godot
+          mkdir -p .godot/editor
+          chmod -R 777 .godot
 
-      # ৪. গডটকে দিয়ে একটি ইউনিভার্সাল পিসিকে (Project Pack - .pck) ফাইল জেনারেট করা
-      # (এটি গডটের আইওএস এক্সপোর্টার এররকে সম্পূর্ণ বাইপাস করবে)
+      # ৪. গডটকে সন্তুষ্ট করার জন্য একটি বেসিক ইউনিভার্সাল প্রিসেট তৈরি করা
+      # (এর জন্য কোনো টিম আইডি বা আইডেন্টিফায়ার লাগবে না, কারণ এটি লিনাক্স/ম্যাক প্যাক হিসেবে কাজ করবে)
+      - name: Inject Basic Universal Export Preset
+        run: |
+          cat << 'EOF' > export_presets.cfg
+          [preset.0]
+          name="macOS"
+          platform="macOS"
+          runnable=true
+          dedicated_server=false
+          custom_features=""
+          export_filter="all_resources"
+          include_filter=""
+          exclude_filter=""
+          export_path="build/ios/game.pck"
+          encryption/encrypt_pck=false
+          encryption/encrypt_directory=false
+
+          [preset.0.options]
+          custom_template/release=""
+          custom_template/debug=""
+          binary_format/architecture="universal"
+          texture_format/s3tc=true
+          texture_format/etc2=true
+          EOF
+          echo "Universal export_presets.cfg created successfully."
+
+      # ৫. গডটকে দিয়ে একটি ইউনিভার্সাল পিসিকে (Project Pack - .pck) ফাইল জেনারেট করা
       - name: Export Godot Project Pack (.pck)
         run: |
           mkdir -p build/ios
@@ -51,7 +79,7 @@ jobs:
             exit 1
           fi
 
-      # ৫. এক্সক্লুসিভ আইওএস বিল্ড স্ট্রাকচার এবং ডামি এক্সকোড প্রজেক্ট রেডি করা
+      # ৬. এক্সক্লুসিভ আইওএস বিল্ড স্ট্রাকচার এবং অফিসিয়াল কন্টেইনার রেডি করা
       - name: Structure Native iOS App Package
         run: |
           cd build/ios
@@ -61,12 +89,12 @@ jobs:
           unzip ios.zip
           rm ios.zip
           
-          # জেনারেট হওয়া ডামি স্ট্রাকচারে আমাদের গেমের .pck ডেটা পুশ করা
+          # জেনারেট হওয়া ডামি স্ট্রাকচারে আমাদের গেমের .pck ডেটা পুш করা
           mkdir -p Payload/GodotApp.app
           cp -r * Payload/GodotApp.app/ 2>/dev/null || true
           mv Payload/GodotApp.app/game.pck Payload/GodotApp.app/godot.pck
 
-      # ৬. এক্সকোড বা অ্যাপল সিএলআই ছাড়াই সলিড আনসাইনড আইপিএ জেনারেট করা
+      # ৭. এক্সকোড বা অ্যাপল সিএলআই ছাড়াই সলিড আনসাইনড আইপিএ জেনারেট করা
       - name: Package to Unsigned .ipa
         run: |
           cd build/ios
@@ -76,7 +104,7 @@ jobs:
           mkdir -p ../../output
           cp MyUnsignedGame.ipa ../../output/
 
-      # ৭. ফাইনাল সাকসেসফুল আনসাইনড আইপিএ ফাইলটি আর্টিফ্যাক্ট হিসেবে আপলোড করা
+      # ৮. ফাইনাল সাকসেসফুল আনসাইনড আইপিএ ফাইলটি আর্টিফ্যাক্ট হিসেবে আপলোড করা
       - name: Upload Finished IPA Artifact
         uses: actions/upload-artifact@v4
         with:

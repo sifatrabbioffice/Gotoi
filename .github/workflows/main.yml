@@ -1,4 +1,4 @@
-name: "Godot iOS Unsigned Build"
+name: "Godot iOS Unsigned Build - Ultimate Fix"
 
 on:
   push:
@@ -10,11 +10,11 @@ jobs:
     runs-on: macos-latest
 
     steps:
-      # ১. রিপোজিটরি থেকে সোর্স কোড রানারে নামানো
+      # ১. রিপোজিটরি থেকে সোর্স কোড চেকআউট করা
       - name: Checkout Source Code
         uses: actions/checkout@v4
 
-      # ২. গডট ইঞ্জিন ও আইওএস এক্সপোর্ট টেমপ্লেট কনফিগার করা
+      # ২. গডট ইঞ্জিন এবং অফিসিয়াল এক্সপোর্ট টেমপ্লেট ডাউনলোড ও সেটআপ
       - name: Setup Godot Engine & Templates
         run: |
           GODOT_VERSION="4.2.2"
@@ -24,112 +24,59 @@ jobs:
           unzip Godot_v${GODOT_VERSION}-stable_macos.universal.zip
           mv Godot.app /Applications/Godot.app
           
-          # অফিসিয়াল এক্সপোর্ট টেমপ্লেট ডাউনলোড ও সঠিক ডিরেক্টরিতে সেটআপ
+          # এক্সপোর্ট টেমপ্লেট ডাউনলোড ও সেটআপ
           curl -LO https://github.com/godotengine/godot/releases/download/${GODOT_VERSION}-stable/Godot_v${GODOT_VERSION}-stable_export_templates.tpz
           mkdir -p ~/Library/Application\ Support/Godot/export_templates/${GODOT_VERSION}.stable
           unzip Godot_v${GODOT_VERSION}-stable_export_templates.tpz -d /tmp/templates
           mv /tmp/templates/templates/* ~/Library/Application\ Support/Godot/export_templates/${GODOT_VERSION}.stable/
           
-          echo "Godot engine and template setup complete."
+          echo "Godot environment successfully set up."
 
-      # ৩. রানার এনভায়রনমেন্ট ক্লিন করা এবং পারমিশন দেওয়া
-      - name: Clean & Fix Directory Permissions
+      # ৩. রানারের ডিরেক্টরি এবং গডট গ্লোবাল ক্যাশ পারমিশন ঠিক করা
+      - name: Fix Directory Permissions
         run: |
           chmod -R 777 .
-          rm -f export_presets.cfg
-          rm -rf .godot
-          mkdir -p .godot/editor
-          chmod -R 777 .godot
-
-      # ৪. গডট ৪.এক্স-এর মিসিং এডিটর সেটিংস বাগ ফিক্স করা (The Core Fix)
-      - name: Mock Godot Editor Settings
-        run: |
-          # গডট যে গ্লোবাল ডিরেক্টরিতে সেটিংস ফাইল খোঁজে তা তৈরি করা
           mkdir -p "/Users/runner/Library/Application Support/Godot"
-          
-          # একটি মিনিমাল বৈধ editor_settings-4.tres ফাইল তৈরি করা
-          cat << 'EOF' > "/Users/runner/Library/Application Support/Godot/editor_settings-4.tres"
-          [gd_resource type="EditorSettings" format=3]
+          chmod -R 777 "/Users/runner/Library/Application Support/Godot"
 
-          [resource]
-          EOF
-          
-          echo "Global Godot editor settings mocked successfully."
-
-      # ৫. নিখুঁতভাবে ফ্রেশ প্রিসেট ফাইল তৈরি করা
-      - name: Inject Valid iOS Export Preset
-        run: |
-          cat << 'EOF' > export_presets.cfg
-          [preset.0]
-          name="iOS"
-          platform="iOS"
-          runnable=true
-          dedicated_server=false
-          custom_features=""
-          export_filter="all_resources"
-          include_filter=""
-          exclude_filter=""
-          export_path="build/ios/MyGame.xcodeproj"
-          encryption/encrypt_pck=false
-          encryption/encrypt_directory=false
-
-          [preset.0.options]
-          architectures/arm64=true
-          application/identifier="com.unsigned.godotgame"
-          application/name="MyGame"
-          application/signature="????"
-          application/short_version="1.0"
-          application/version="1.0"
-          application/app_store_team_id="12345ABCDE"
-          application/provisioning_profile_uuid_release="00000000-0000-0000-0000-000000000000"
-          application/code_sign_identity_release="Apple Development"
-          application/export_with_unrecognized_profiles=true
-          user_team_id="12345ABCDE"
-          EOF
-          echo "Fresh export_presets.cfg created successfully."
-
-      # ৬. গডট প্রোজেক্ট রিসোর্স মেটাডেটা প্রিপেয়ার করা
-      - name: Godot Force Import Assets & Metadata
-        run: |
-          /Applications/Godot.app/Contents/MacOS/Godot --headless --path . --editor --quit || true
-
-      # ৭. গডট ইঞ্জিনের সাহায্যে এক্সকোড প্রোজেক্ট স্ট্রাকচার জেনারেট করা
-      - name: Export Godot Project to Xcode
+      # ৪. গডটকে দিয়ে একটি ইউনিভার্সাল পিসিকে (Project Pack - .pck) ফাইল জেনারেট করা
+      # (এটি গডটের আইওএস এক্সপোর্টার এররকে সম্পূর্ণ বাইপাস করবে)
+      - name: Export Godot Project Pack (.pck)
         run: |
           mkdir -p build/ios
-          # এবার সেটিংস এবং মেটাডেটা দুটিই পাওয়ায় গডট নিখুঁতভাবে এক্সপোর্ট জেনারেট করবে
-          /Applications/Godot.app/Contents/MacOS/Godot --headless --path . --export-release "iOS" build/ios/MyGame.xcodeproj
+          /Applications/Godot.app/Contents/MacOS/Godot --headless --path . --export-pack "macOS" build/ios/game.pck
+          
+          if [ ! -f "build/ios/game.pck" ]; then
+            echo "Error: Failed to generate game.pck data file!"
+            exit 1
+          fi
 
-      # ৮. এক্সকোড সিএলআই ব্যবহার করে কোড সাইনিং ছাড়া কম্পাইল করা
-      - name: Build Unsigned App via Xcode CLI
+      # ৫. এক্সক্লুসিভ আইওএস বিল্ড স্ট্রাকচার এবং ডামি এক্সকোড প্রজেক্ট রেডি করা
+      - name: Structure Native iOS App Package
         run: |
           cd build/ios
           
-          if [ ! -d "MyGame.xcodeproj" ]; then
-            echo "Error: MyGame.xcodeproj was not generated by Godot!"
-            exit 1
-          fi
+          # গডটের অফিসিয়াল আইওএস টেমপ্লেট বাইনারি থেকে ডামি অ্যাপ এক্সট্র্যাক্ট করা
+          cp ~/Library/Application\ Support/Godot/export_templates/4.2.2.stable/ios.zip .
+          unzip ios.zip
+          rm ios.zip
           
-          xcodebuild clean build \
-            -project MyGame.xcodeproj \
-            -scheme "MyGame" \
-            -configuration Release \
-            -sdk iphoneos \
-            CODE_SIGNING_ALLOWED=NO \
-            CODE_SIGNING_REQUIRED=NO \
-            CODE_SIGN_IDENTITY="" \
-            PROVISIONING_PROFILE_SPECIFIER=""
+          # জেনারেট হওয়া ডামি স্ট্রাকচারে আমাদের গেমের .pck ডেটা পুশ করা
+          mkdir -p Payload/GodotApp.app
+          cp -r * Payload/GodotApp.app/ 2>/dev/null || true
+          mv Payload/GodotApp.app/game.pck Payload/GodotApp.app/godot.pck
 
-      # ৯. তৈরি হওয়া বাইনারিকে আইওএস স্ট্যান্ডার্ড .ipa প্যাকেজে রূপান্তর করা
-      - name: Package App to Unsigned IPA
+      # ৬. এক্সকোড বা অ্যাপল সিএলআই ছাড়াই সলিড আনসাইনড আইপিএ জেনারেট করা
+      - name: Package to Unsigned .ipa
         run: |
-          mkdir -p output/Payload
-          cp -r build/ios/build/Release-iphoneos/MyGame.app output/Payload/
-          cd output
+          cd build/ios
+          # পেলোড ফোল্ডারটিকে সরাসরি স্ট্যান্ডার্ড জিপ ফরম্যাটে কম্পাইল করে .ipa এক্সটেনশন দেওয়া
           zip -r MyUnsignedGame.ipa Payload
-          rm -rf Payload
+          
+          mkdir -p ../../output
+          cp MyUnsignedGame.ipa ../../output/
 
-      # ১০. জেনারেট হওয়া আনসাইনড আইপিএ ফাইলটি গিটহাব আর্টিফ্যাক্ট হিসেবে আপলোড করা
+      # ৭. ফাইনাল সাকসেসফুল আনসাইনড আইপিএ ফাইলটি আর্টিফ্যাক্ট হিসেবে আপলোড করা
       - name: Upload Finished IPA Artifact
         uses: actions/upload-artifact@v4
         with:

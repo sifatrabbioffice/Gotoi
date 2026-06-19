@@ -32,54 +32,27 @@ jobs:
           
           echo "Godot environment successfully set up."
 
-      # ৩. রানারের ডিরেক্টরি পারমিশন ফিক্স করা (Write Permission Error Fix)
-      - name: Hard Fix Directory Permissions
+      # ৩. রানারের ডিরেক্টরি পারমিশন ফিক্স করা
+      - name: Fix Directory Permissions
         run: |
           sudo chown -R runner:staff .
           chmod -R 777 .
-          rm -rf .godot
-          mkdir -p .godot/editor
-          chmod -R 777 .godot
 
-      # ৪. গডটকে সন্তুষ্ট করার জন্য একটি বেসিক ইউনিভার্সাল প্রিসেট তৈরি করা
-      # (এর জন্য কোনো টিম আইডি বা আইডেন্টিফায়ার লাগবে না, কারণ এটি লিনাক্স/ম্যাক প্যাক হিসেবে কাজ করবে)
-      - name: Inject Basic Universal Export Preset
-        run: |
-          cat << 'EOF' > export_presets.cfg
-          [preset.0]
-          name="macOS"
-          platform="macOS"
-          runnable=true
-          dedicated_server=false
-          custom_features=""
-          export_filter="all_resources"
-          include_filter=""
-          exclude_filter=""
-          export_path="build/ios/game.pck"
-          encryption/encrypt_pck=false
-          encryption/encrypt_directory=false
-
-          [preset.0.options]
-          custom_template/release=""
-          custom_template/debug=""
-          binary_format/architecture="universal"
-          texture_format/s3tc=true
-          texture_format/etc2=true
-          EOF
-          echo "Universal export_presets.cfg created successfully."
-
-      # ৫. গডটকে দিয়ে একটি ইউনিভার্সাল পিসিকে (Project Pack - .pck) ফাইল জেনারেট করা
-      - name: Export Godot Project Pack (.pck)
+      # ৪. গডটের ইন্টারনাল কমান্ড ব্যবহার করে কোনো প্রিসেট ছাড়াই সরাসরি প্রজেক্ট প্যাক (.pck) তৈরি করা
+      - name: Pack Project Files Freely
         run: |
           mkdir -p build/ios
-          /Applications/Godot.app/Contents/MacOS/Godot --headless --path . --export-pack "macOS" build/ios/game.pck
-          
+          # --pack কমান্ডটি কোনো প্রিসেট ফাইল ছাড়া সরাসরি ফ্রেশ .pck ফাইল তৈরি করে দেবে
+          /Applications/Godot.app/Contents/MacOS/Godot --headless --path . --pack build/ios/game.pck
+
+          # ফাইলটি তৈরি হয়েছে কিনা তা নিশ্চিত করা
           if [ ! -f "build/ios/game.pck" ]; then
-            echo "Error: Failed to generate game.pck data file!"
+            echo "Error: game.pck was not generated!"
             exit 1
           fi
+          echo "game.pck generated successfully without any presets."
 
-      # ৬. এক্সক্লুসিভ আইওএস বিল্ড স্ট্রাকচার এবং অফিসিয়াল কন্টেইনার রেডি করা
+      # ৫. নেটিভ আইওএস বিল্ড স্ট্রাকচার এবং অফিশিয়াল কন্টেইনার রেডি করা
       - name: Structure Native iOS App Package
         run: |
           cd build/ios
@@ -89,12 +62,12 @@ jobs:
           unzip ios.zip
           rm ios.zip
           
-          # জেনারেট হওয়া ডামি স্ট্রাকচারে আমাদের গেমের .pck ডেটা পুш করা
+          # জেনারেট হওয়া ডামি স্ট্রাকচারে আমাদের গেমের .pck ডেটা পুশ করা
           mkdir -p Payload/GodotApp.app
           cp -r * Payload/GodotApp.app/ 2>/dev/null || true
           mv Payload/GodotApp.app/game.pck Payload/GodotApp.app/godot.pck
 
-      # ৭. এক্সকোড বা অ্যাপল সিএলআই ছাড়াই সলিড আনসাইনড আইপিএ জেনারেট করা
+      # ৬. এক্সকোড বা অ্যাপল সিএলআই ছাড়াই সলিড আনসাইনড আইপিএ জেনারেট করা
       - name: Package to Unsigned .ipa
         run: |
           cd build/ios
@@ -104,7 +77,7 @@ jobs:
           mkdir -p ../../output
           cp MyUnsignedGame.ipa ../../output/
 
-      # ৮. ফাইনাল সাকসেসফুল আনসাইনড আইপিএ ফাইলটি আর্টিফ্যাক্ট হিসেবে আপলোড করা
+      # ৭. ফাইনাল সাকসেসফুল আনসাইনড আইপিএ ফাইলটি আর্টিফ্যাক্ট হিসেবে আপলোড করা
       - name: Upload Finished IPA Artifact
         uses: actions/upload-artifact@v4
         with:

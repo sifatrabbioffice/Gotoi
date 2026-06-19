@@ -58,12 +58,12 @@ jobs:
                 platform: iOS
                 deploymentTarget: "14.0"
                 sources: [.]
-    EOF
+            EOF
             
             xcodegen generate
           else
             echo "game.xcodeproj already exists. Skipping XcodeGen."
-          fi
+               fi
 
       # ৬. এক্সকোড দিয়ে আনসাইনড আইপিএ তৈরি করা
       - name: Build Xcode Project (Unsigned)

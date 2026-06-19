@@ -21,7 +21,7 @@ jobs:
           echo "Unzipping project files..."
           unzip -o game_project.zip -d project_folder
           
-      # ৩. গডট ইঞ্জিন ডাউনলোড ও সেটআপ করা
+      # ৩. গডট ইঞ্জিন ডাউনলোড ও সেটআপ করা (Godot 4.x)
       - name: Download and Setup Godot Engine
         run: |
           echo "Downloading Godot Engine..."
@@ -30,29 +30,30 @@ jobs:
           mv Godot.app /Applications/Godot.app
           echo "/Applications/Godot.app/Contents/MacOS" >> $GITHUB_PATH
 
-      # ৪. গডট প্রজেক্ট থেকে আইওএস প্রজেক্ট এক্সপোর্ট করা
+      # ৪. গডট প্রজেক্ট থেকে আইওএস এক্সকোড প্রজেক্ট তৈরি করা
       - name: Godot Export to iOS
         run: |
           mkdir -p build/ios
-          Godot --headless --path project_folder --export-release "iOS" build/ios/export_project.xcodeproj
+          # --export-release কমান্ড দিয়ে সরাসরি একটি নির্দিষ্ট পাথে সোর্স ফাইল এক্সপোর্ট করা হচ্ছে
+          Godot --headless --path project_folder --export-release "iOS" build/ios/game.xcodeproj
           
-          # যদি গডট ফোল্ডার আকারে এক্সপোর্ট করে, তবে ভেতরের ফাইলের নাম চেক করা
+          echo "Checking exported files:"
           ls -la build/ios
 
-      # ৫. এক্সকোড প্রজেক্ট এবং স্কিম অটোমেটিক খুঁজে বের করে বিল্ড করা
+      # ৫. এক্সকোড প্রজেক্ট অটো-ডিটেক্ট করে আনসাইনড বিল্ড করা
       - name: Build Xcode Project (Unsigned)
         run: |
           cd build/ios
           
-          # গডট যে নামেই .xcodeproj তৈরি করুক, তা খুঁজে বের করা
+          # যদি কোনো কারণে গডট প্রজেক্ট ফাইলের নাম পরিবর্তন করে, তবে তা অটো খুঁজে নেবে
           XCODE_PROJ=$(ls -d *.xcodeproj | head -n 1)
-          echo "Found Xcode Project: $XCODE_PROJ"
+          echo "Target Xcode Project: $XCODE_PROJ"
           
-          # প্রজেক্টের ভেতরের সঠিক স্কিম (Scheme) এর নাম খুঁজে বের করা
+          # প্রজেক্টের ভেতরের একটি সঠিক একটিভ স্কিম (Scheme) এর নাম বের করা
           SCHEME_NAME=$(xcodebuild -list -project "$XCODE_PROJ" | awk '/Schemes:/{flag=1;next}/^$/{flag=0}flag' | sed 's/^[ \t]*//' | head -n 1)
-          echo "Found Scheme Name: $SCHEME_NAME"
+          echo "Target Scheme Name: $SCHEME_NAME"
           
-          # এক্সকোড বিল্ড রান করা
+          # এক্সকোড কমান্ড লাইন দিয়ে সাইনিং ছাড়াই আইওএস কম্পাইল করা
           xcodebuild -project "$XCODE_PROJ" \
             -scheme "$SCHEME_NAME" \
             -configuration Release \
@@ -63,7 +64,7 @@ jobs:
             PROVISIONING_PROFILE_SPECIFIER="" \
             clean build
 
-      # ৬. বিল্ড করা ফাইলগুলোকে আর্টফ্যাক্ট হিসেবে সেভ করা
+      # ৬. তৈরি হওয়া আনসাইনড বিল্ডটি ডাউনলোড বা আর্টফ্যাক্ট হিসেবে সেভ করা
       - name: Upload Unsigned Build Artifact
         uses: actions/upload-artifact@v4
         with:

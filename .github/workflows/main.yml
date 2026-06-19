@@ -38,19 +38,35 @@ jobs:
           sudo chown -R runner:staff .
           chmod -R 777 .
 
-      # ৪. গডটের ইন্টারনাল কমান্ড ব্যবহার করে কোনো প্রিসেট ছাড়াই সরাসরি প্রজেক্ট প্যাক (.pck) তৈরি করা
+      # ৪. ডাইনামিকালি আসল প্রজেক্ট পাথ খুঁজে বের করা এবং প্যাক ফাইল জেনারেট করা
       - name: Pack Project Files Freely
         run: |
           mkdir -p build/ios
-          # --pack কমান্ডটি কোনো প্রিসেট ফাইল ছাড়া সরাসরি ফ্রেশ .pck ফাইল তৈরি করে দেবে
-          /Applications/Godot.app/Contents/MacOS/Godot --headless --path . --pack build/ios/game.pck
+          
+          # ইন্টেলিজেন্টলি project.godot ফাইলের সঠিক লোকেশন খুঁজে বের করা
+          PROJECT_PATH=$(find . -name "project.godot" -exec dirname {} \;)
+          
+          if [ -z "$PROJECT_PATH" ]; then
+            echo "Error: project.godot file not found anywhere in the repository!"
+            exit 1
+          fi
+          
+          echo "Success: Found project.godot at path: $PROJECT_PATH"
+          
+          echo "Starting Asset Import Warmup..."
+          # সঠিক পাথে গডট এডিটর রান করানো হচ্ছে যাতে এসেট ইনডেক্সিং কমপ্লিট হয়
+          /Applications/Godot.app/Contents/MacOS/Godot --headless --path "$PROJECT_PATH" --editor --quit || true
+          
+          echo "Starting Final Project Packing..."
+          # সঠিক পাথে গডটকে নির্দেশ দিয়ে .pck তৈরি করা
+          /Applications/Godot.app/Contents/MacOS/Godot --headless --path "$PROJECT_PATH" --pack build/ios/game.pck
 
           # ফাইলটি তৈরি হয়েছে কিনা তা নিশ্চিত করা
           if [ ! -f "build/ios/game.pck" ]; then
             echo "Error: game.pck was not generated!"
             exit 1
           fi
-          echo "game.pck generated successfully without any presets."
+          echo "game.pck generated successfully without freezing."
 
       # ৫. নেটিভ আইওএস বিল্ড স্ট্রাকচার এবং অফিশিয়াল কন্টেইনার রেডি করা
       - name: Structure Native iOS App Package

@@ -1,4 +1,4 @@
-name: "Godot iOS Unsigned Build with XcodeGen"
+name: "Godot iOS Unsigned Build"
 
 on:
   push:
@@ -30,47 +30,31 @@ jobs:
           mv Godot.app /Applications/Godot.app
           echo "/Applications/Godot.app/Contents/MacOS" >> $GITHUB_PATH
 
-      # ৪. গডট প্রজেক্ট থেকে আইওএস সোর্স ফাইল এক্সপোর্ট করা
-      - name: Godot Export to iOS Source
+      # ৪. গডট প্রজেক্ট থেকে আইওএস প্রজেক্ট এক্সপোর্ট করা
+      - name: Godot Export to iOS
         run: |
           mkdir -p build/ios
-          # এখানে আমরা ডিরেক্টরি হিসেবে এক্সপোর্ট করছি, সরাসরি xcodeproj ফাইল হিসেবে নয়
-          Godot --headless --path project_folder --export-release "iOS" build/ios/
-
-      # ৫. XcodeGen ইনস্টল ও রান করা (যদি প্রজেক্ট ফাইল মিসিং থাকে)
-      - name: Install and Run XcodeGen
-        run: |
-          brew install xcodegen
-          cd build/ios
+          Godot --headless --path project_folder --export-release "iOS" build/ios/export_project.xcodeproj
           
-          # যদি গডট অলরেডি xcodeproj তৈরি না করে থাকে, তবে XcodeGen এর জন্য একটি configuration তৈরি করা
-          if [ ! -d "game.xcodeproj" ]; then
-            echo "game.xcodeproj not found. Generating with XcodeGen..."
-            
-            # একটি বেসিক project.yml ফাইল তৈরি করা
-            cat <<EOF > project.yml
-            name: game
-            options:
-              bundleIdPrefix: com.example
-            targets:
-              game:
-                type: application
-                platform: iOS
-                deploymentTarget: "14.0"
-                sources: [.]
-            EOF
-            
-            xcodegen generate
-          else
-            echo "game.xcodeproj already exists. Skipping XcodeGen."
-               fi
+          # যদি গডট ফোল্ডার আকারে এক্সপোর্ট করে, তবে ভেতরের ফাইলের নাম চেক করা
+          ls -la build/ios
 
-      # ৬. এক্সকোড দিয়ে আনসাইনড আইপিএ তৈরি করা
+      # ৫. এক্সকোড প্রজেক্ট এবং স্কিম অটোমেটিক খুঁজে বের করে বিল্ড করা
       - name: Build Xcode Project (Unsigned)
         run: |
           cd build/ios
-          xcodebuild -project game.xcodeproj \
-            -scheme "game" \
+          
+          # গডট যে নামেই .xcodeproj তৈরি করুক, তা খুঁজে বের করা
+          XCODE_PROJ=$(ls -d *.xcodeproj | head -n 1)
+          echo "Found Xcode Project: $XCODE_PROJ"
+          
+          # প্রজেক্টের ভেতরের সঠিক স্কিম (Scheme) এর নাম খুঁজে বের করা
+          SCHEME_NAME=$(xcodebuild -list -project "$XCODE_PROJ" | awk '/Schemes:/{flag=1;next}/^$/{flag=0}flag' | sed 's/^[ \t]*//' | head -n 1)
+          echo "Found Scheme Name: $SCHEME_NAME"
+          
+          # এক্সকোড বিল্ড রান করা
+          xcodebuild -project "$XCODE_PROJ" \
+            -scheme "$SCHEME_NAME" \
             -configuration Release \
             -sdk iphoneos \
             CODE_SIGNING_ALLOWED=NO \
@@ -79,7 +63,7 @@ jobs:
             PROVISIONING_PROFILE_SPECIFIER="" \
             clean build
 
-      # ৭. বিল্ড করা ফাইলগুলোকে আর্টফ্যাক্ট হিসেবে সেভ করা
+      # ৬. বিল্ড করা ফাইলগুলোকে আর্টফ্যাক্ট হিসেবে সেভ করা
       - name: Upload Unsigned Build Artifact
         uses: actions/upload-artifact@v4
         with:
